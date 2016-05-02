@@ -65,8 +65,8 @@ LOGGING_LEVEL = logging.ERROR
 logging.basicConfig(level=LOGGING_LEVEL,
                     format='%(asctime)s %(levelname)-8s %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
-                    stream=sys.stdout)
-                    #filename=_DEFAULT_LOG_FILE)
+                    #stream=sys.stdout,
+                    filename=_DEFAULT_LOG_FILE)
 
 
 def read_config(config_file, section_to_read):
