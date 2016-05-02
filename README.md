@@ -28,13 +28,14 @@ requests
 Run this script in a cronjob of 1 minute intervals in order to keep a track of the live submissions on VirusTotal.
 ```
 */1 * * * * python PATH_TO_SCRIPT/vtfeeds.py file
+*/1 * * * * python PATH_TO_SCRIPT/vtfeeds.py url
 ```
 Before using this script use following command in your MongoDB instance in order to index the 'sha256' and 'url' fields for optimized query speeds:
 ```
 db.file.createIndex({sha256:1})
+db.url.createIndex({url:1})
 ```
 
 ## License
 
 Do whatever you want with it
-
