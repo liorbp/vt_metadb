@@ -6,8 +6,6 @@ Modified by: Lior Ben-Porat (RSA Security)
 This script is used to sync-up with VirusTotal file/url feed API and store meta-data
 of every submission to Virustotal in a MongoDB instance. This information can later
 be utilized for threat intelligence gathering.
-Make sure you run this script in a cronjob of 1 minute intervals in order to keep
-a track of the live submissions on VirusTotal.
 Before using this script use following commands in your MongoDB instance in order to
 index the 'sha256' and 'url' fields for optimized query speeds:
 db.file.createIndex({sha256:1})
@@ -23,7 +21,7 @@ Please contact VirusTotal to obtain a Private API key for this script to functio
 """
 
 __author__ = 'Lior Ben-Porat (RSA Security)'
-__version__ = '0.2'
+__version__ = '0.3'
 
 import ConfigParser
 import json
@@ -37,6 +35,8 @@ import sys
 import tarfile
 import threading
 from datetime import datetime, timedelta
+from datetime import datetime, timedelta
+from twisted.internet import reactor, task
 
 
 _FEEDS = [
@@ -309,6 +309,25 @@ def process_package(package_path):
                 process_feed_item(item_report)
 
 
+def queue_handler(settings, feed):
+    # Set the package format required by VirusTotal
+    package = datetime.strftime(datetime.now() - timedelta(hours=int(settings.get('time_delta'))), '%Y%m%dT%H%M')
+    # Download the compressed package with all the items processed by VirusTotal
+    # during the time window being requested.
+    logging.info('Fetching package file with timestamp: %s', package)
+    package_path = get_package(package, settings.get('api_key'), feed=feed)
+    if not package_path:
+        logging.error('Failed to download feed package')
+        return
+    process_package(package_path)
+    _process_queue.join()
+    # We delete the time window feed package. If you need to keep these report
+    # buckets you should comment out this line and rather store the packages in
+    # a n-level directory structure or persistent storage.
+    if package_path and os.path.exists(package_path):
+        os.remove(package_path)
+
+
 def main():
     """Pipeline the entire feed processing logic."""
     if len(sys.argv) != 2:
@@ -337,21 +356,10 @@ def main():
     # processed from there.
     create_package_store(feed)
     launch_feed_handlers(feed)
-    # Download the compressed package with all the items processed by VirusTotal
-    # during the time window being requested.
-    logging.info('Fetching package file with timestamp: %s', package)
-    package_path = get_package(package, settings.get('api_key'), feed=feed)
-    if not package_path:
-        logging.error('Failed to download feed package')
-        return
-    process_package(package_path)
-    _process_queue.join()
-    # We delete the time window feed package. If you need to keep these report
-    # buckets you should comment out this line and rather store the packages in
-    # a n-level directory structure or persistent storage.
-    if package_path and os.path.exists(package_path):
-        os.remove(package_path)
-
+    # Call the queue_handler every one minute to add items to the queue
+    l = task.LoopingCall(queue_handler, settings, feed)
+    l.start(60.0) # Call every 60 seconds
+    reactor.run()
 
 if __name__ == '__main__':
     main()
